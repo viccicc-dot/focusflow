@@ -1,0 +1,18 @@
+services:
+  focusflow:
+    build: .
+    ports:
+      - "4173:4173"
+    environment:
+      PORT: 4173
+      JWT_SECRET: change-this-to-a-long-random-production-secret
+      DATABASE_PATH: /app/data/focusflow.db
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - focusflow_data:/app/data
+      - focusflow_uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  focusflow_data:
+  focusflow_uploads:
