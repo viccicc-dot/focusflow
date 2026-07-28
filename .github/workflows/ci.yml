@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,5 +33,17 @@ jobs:
           node --check server/seed-data.js
           node --check server/seed.js
 
+      - name: Validate launch and deployment configs
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('railway.json', 'utf8'))"
+          ruby -e "require 'yaml'; data = YAML.load_file('render.yaml'); abort 'render.yaml services missing' unless data['services'].is_a?(Array) && !data['services'].empty?"
+          test -f "启动FocusFlow.bat"
+          grep -q "npm.cmd run dev" "启动FocusFlow.bat"
+          grep -q "/api/health" render.yaml
+          grep -q '"/api/health"' railway.json
+
       - name: Build client
         run: npm run build
+
+      - name: Build Docker image
+        run: docker build --tag focusflow-ci .
