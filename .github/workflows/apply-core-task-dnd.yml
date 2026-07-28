@@ -1,0 +1,42 @@
+name: Apply core task drag-and-drop
+
+on:
+  push:
+    branches: [feature/core-task-parity]
+    paths:
+      - '.automation/core-task-dnd/**'
+      - '.github/workflows/apply-core-task-dnd.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/core-task-parity
+          fetch-depth: 0
+
+      - name: Apply verified patches
+        run: |
+          git apply --check .automation/core-task-dnd/app.patch
+          git apply --check .automation/core-task-dnd/styles.patch
+          git apply --check .automation/core-task-dnd/server.patch
+          git apply .automation/core-task-dnd/app.patch
+          git apply .automation/core-task-dnd/styles.patch
+          git apply .automation/core-task-dnd/server.patch
+
+      - name: Commit feature implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -r .automation/core-task-dnd
+          git rm .github/workflows/apply-core-task-dnd.yml
+          git add client/src/App.jsx client/src/styles.css server/index.js
+          git commit -m "feat: add drag-and-drop task ordering"
+          git push origin HEAD:feature/core-task-parity
