@@ -119,7 +119,13 @@ a { color: inherit; text-decoration: none; }
 .content-body { flex:1; overflow:auto; padding:18px max(34px,calc((100vw - var(--sidebar-w) - 880px)/2)); }
 .content-body.board,.content-body.calendar { padding-left:26px; padding-right:26px; }
 .task-list,.sections-list { max-width:860px; margin:0 auto; }
-.task-row { min-height:58px; display:flex; align-items:flex-start; gap:11px; padding:12px 4px; border-bottom:1px solid var(--border); cursor:pointer; position:relative; }
+.task-row { min-height:58px; display:flex; align-items:flex-start; gap:11px; padding:12px 4px; border-bottom:1px solid var(--border); cursor:pointer; position:relative; transition:opacity .15s,background .15s,transform .15s; }
+.task-row[draggable="true"] { cursor:grab; }
+.task-row[draggable="true"]:active { cursor:grabbing; }
+.task-row.dragging,.task-card.dragging { opacity:.35; transform:scale(.99); }
+.task-row.drop-before::before,.task-row.drop-after::after,.task-card.drop-before::before,.task-card.drop-after::after { content:""; position:absolute; left:0; right:0; height:2px; border-radius:2px; background:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); z-index:3; }
+.task-row.drop-before::before,.task-card.drop-before::before { top:-1px; }
+.task-row.drop-after::after,.task-card.drop-after::after { bottom:-1px; }
 .task-row:hover .task-hover { opacity:1; }
 .task-row.completed .task-title { color:var(--faint); text-decoration:line-through; }
 .task-check { width:18px; height:18px; margin-top:2px; border:1.7px solid; border-radius:50%; display:grid; place-items:center; color:#fff; flex:0 0 auto; transition:.15s; }
@@ -145,14 +151,20 @@ a { color: inherit; text-decoration: none; }
 .empty-state p { font-size:13px; }
 .task-section { margin-bottom:34px; }
 .task-section h3 { font-size:14px; margin:0; padding:8px 4px; border-bottom:1px solid var(--border-strong); }
+.task-drop-zone,.board-drop-zone { height:0; overflow:hidden; opacity:0; display:grid; place-items:center; color:var(--accent); border:1px dashed transparent; border-radius:6px; font-size:11px; transition:.15s; }
+.task-drop-zone.active { height:28px; opacity:1; border-color:color-mix(in srgb,var(--accent) 45%,transparent); background:var(--accent-soft); margin-top:4px; }
+.board-drop-zone.active { height:34px; opacity:1; border-color:color-mix(in srgb,var(--accent) 45%,transparent); background:var(--accent-soft); margin-bottom:8px; }
 .task-section h3 span { color:var(--faint); font-size:11px; margin-left:7px; font-weight:500; }
 
 .board { min-width:760px; display:flex; align-items:flex-start; gap:14px; padding-bottom:20px; }
-.board-column { width:285px; flex:0 0 285px; background:var(--panel); border-radius:10px; padding:8px; min-height:200px; }
+.board-column { width:285px; flex:0 0 285px; background:var(--panel); border-radius:10px; padding:8px; min-height:200px; transition:background .15s,box-shadow .15s; }
+.board-column.drag-active { box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 28%,transparent); }
 .board-title { height:37px; display:flex; align-items:center; gap:8px; padding:0 5px; font-size:13px; font-weight:600; }
 .board-title span { flex:1; }
 .board-title em { font-style:normal; color:var(--faint); font-size:11px; }
-.task-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:11px; margin-bottom:8px; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.03); }
+.task-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:11px; margin-bottom:8px; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.03); position:relative; transition:opacity .15s,transform .15s,border-color .15s,box-shadow .15s; }
+.task-card[draggable="true"] { cursor:grab; }
+.task-card[draggable="true"]:active { cursor:grabbing; }
 .task-card:hover { border-color:var(--border-strong); box-shadow:0 3px 10px rgba(0,0,0,.05); }
 .card-top { display:flex; align-items:flex-start; gap:9px; font-size:13px; line-height:1.4; }
 .task-card p { color:var(--muted); font-size:11px; margin:8px 0 0; line-height:1.5; }
