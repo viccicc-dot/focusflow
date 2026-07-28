@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: focusflow
+    runtime: docker
+    plan: starter
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_PATH
+        value: /app/persistent/focusflow.db
+      - key: UPLOAD_DIR
+        value: /app/persistent/uploads
+      - key: SEED_DEMO
+        value: "false"
+    disk:
+      name: focusflow-data
+      mountPath: /app/persistent
+      sizeGB: 1
