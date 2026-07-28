@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { db, id, now } from './db.js';
 
 export async function createAccount({ email, name, password, demo = false }) {
+  if (demo && String(process.env.SEED_DEMO ?? 'true').toLowerCase() === 'false') return null;
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (existing) return existing.id;
   const timestamp = now();

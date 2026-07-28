@@ -1,0 +1,17 @@
+node_modules
+client/dist
+.git
+.github
+.env
+.env.*
+!.env.example
+data
+uploads
+*.db
+*.db-shm
+*.db-wal
+*.log
+npm-debug.log*
+DEPLOYMENT.md
+IMPLEMENTATION_STATUS.md
+VALIDATION.md
