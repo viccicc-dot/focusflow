@@ -1,0 +1,125 @@
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 8ebd127..63535ce 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -150,19 +150,53 @@ function Header({title,subtitle,viewMode,setViewMode,onQuickAdd,onMenu,sidebarCo
+ 
+ function TaskCheckbox({task,onToggle}) { return <button className="task-check" style={{borderColor:priorityColor[task.priority]}} onClick={e=>{e.stopPropagation();onToggle(task)}}>{task.completed_at&&<Check size={14}/>}</button>; }
+ function TaskMeta({task}) { return <div className="task-meta">{task.due_date&&<span className={task.due_date<todayISO()&&!task.completed_at?'overdue':''}><CalendarDays size={13}/>{format(parseISO(task.due_date),'M月d日',{locale:zhCN})}{task.due_time&&` ${task.due_time}`}</span>}{task.recurrence_rule&&<span><Repeat2 size={13}/>{task.recurrence_rule}</span>}{task.duration_minutes&&<span><Clock3 size={13}/>{task.duration_minutes} 分钟</span>}{task.labels?.map(l=><span key={l.id}><Hash size={12} style={{color:l.color}}/>{l.name}</span>)}{task.project_name&&<span className="push-right"><span className="project-dot tiny" style={{background:task.project_color}}/>{task.project_name}</span>}</div>; }
+-function TaskRow({task,onOpen,onToggle}) { return <div className={`task-row ${task.completed_at?'completed':''}`} onClick={()=>onOpen(task.id)}><TaskCheckbox task={task} onToggle={onToggle}/><div className="task-content"><div className="task-title">{task.content}</div>{task.description&&<div className="task-description">{task.description}</div>}<TaskMeta task={task}/></div><div className="task-hover"><button><Edit3 size={16}/></button><button><MoreHorizontal size={17}/></button></div></div>; }
++function TaskRow({task,onOpen,onToggle,drag}) {
++  return <div
++    className={`task-row ${task.completed_at?'completed':''} ${drag?.dragging?'dragging':''} ${drag?.dropPosition?`drop-${drag.dropPosition}`:''}`}
++    draggable={Boolean(drag?.enabled)}
++    onDragStart={drag?.onDragStart}
++    onDragEnd={drag?.onDragEnd}
++    onDragOver={drag?.onDragOver}
++    onDrop={drag?.onDrop}
++    onClick={()=>onOpen(task.id)}
++  ><TaskCheckbox task={task} onToggle={onToggle}/><div className="task-content"><div className="task-title">{task.content}</div>{task.description&&<div className="task-description">{task.description}</div>}<TaskMeta task={task}/></div><div className="task-hover"><button><Edit3 size={16}/></button><button><MoreHorizontal size={17}/></button></div></div>;
++}
++
++function useTaskDrag(onMove,enabled) {
++  const [draggingId,setDraggingId]=useState(null);
++  const [over,setOver]=useState(null);
++  const start=(event,id)=>{if(!enabled)return;setDraggingId(id);event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',id)};
++  const end=()=>{setDraggingId(null);setOver(null)};
++  const overRow=(event,id)=>{if(!enabled||!draggingId||draggingId===id)return;event.preventDefault();event.stopPropagation();const rect=event.currentTarget.getBoundingClientRect();setOver({id,position:event.clientY<rect.top+rect.height/2?'before':'after'})};
++  const dropRow=(event,items,sectionId,targetId)=>{if(!enabled)return;event.preventDefault();event.stopPropagation();const id=draggingId||event.dataTransfer.getData('text/plain');if(!id||id===targetId)return end();const candidates=items.filter(item=>item.id!==id);const targetIndex=candidates.findIndex(item=>item.id===targetId);const position=over?.id===targetId&&over.position==='after'?targetIndex+1:targetIndex;onMove(id,sectionId,Math.max(0,position));end()};
++  const dropEnd=(event,sectionId,items)=>{if(!enabled)return;event.preventDefault();event.stopPropagation();const id=draggingId||event.dataTransfer.getData('text/plain');if(id)onMove(id,sectionId,items.filter(item=>item.id!==id).length);end()};
++  return {draggingId,over,start,end,overRow,dropRow,dropEnd};
++}
+ 
+-function ListView({tasks,sections,onOpen,onToggle,onInlineAdd,projectId,onCreateSection}) {
+-  const top=tasks.filter(t=>!t.parent_id);
+-  if(projectId&&sections.length){return <div className="sections-list">{sections.map(s=>{const st=top.filter(t=>t.section_id===s.id);return <section key={s.id} className="task-section"><h3>{s.name}<span>{st.length}</span></h3>{st.map(t=><TaskRow key={t.id} task={t} onOpen={onOpen} onToggle={onToggle}/>) }<InlineAdd onAdd={content=>onInlineAdd(content,s.id)}/></section>})}<section className="task-section"><h3>无分区</h3>{top.filter(t=>!t.section_id).map(t=><TaskRow key={t.id} task={t} onOpen={onOpen} onToggle={onToggle}/>)}<InlineAdd onAdd={c=>onInlineAdd(c,null)}/></section><button className="section-add" onClick={onCreateSection}><Plus size={15}/>添加分区</button></div>}
+-  return <div className="task-list">{projectId&&<button className="section-add" onClick={onCreateSection}><Plus size={15}/>添加分区</button>}{top.map(t=><TaskRow key={t.id} task={t} onOpen={onOpen} onToggle={onToggle}/>)}<InlineAdd onAdd={c=>onInlineAdd(c,null)}/>{!top.length&&<EmptyState/>}</div>;
++function DraggableRows({items,sectionId,onOpen,onToggle,canReorder,drag}) {
++  return <>{items.map(task=><TaskRow key={task.id} task={task} onOpen={onOpen} onToggle={onToggle} drag={{enabled:canReorder,dragging:drag.draggingId===task.id,dropPosition:drag.over?.id===task.id?drag.over.position:null,onDragStart:e=>drag.start(e,task.id),onDragEnd:drag.end,onDragOver:e=>drag.overRow(e,task.id),onDrop:e=>drag.dropRow(e,items,sectionId,task.id)}}/>)}<div className={`task-drop-zone ${drag.draggingId?'active':''}`} onDragOver={e=>{if(canReorder)e.preventDefault()}} onDrop={e=>drag.dropEnd(e,sectionId,items)}>拖到这里移到末尾</div></>;
++}
++
++function ListView({tasks,sections,onOpen,onToggle,onInlineAdd,projectId,onCreateSection,onMove,canReorder}) {
++  const top=tasks.filter(t=>!t.parent_id).sort((a,b)=>a.position-b.position);
++  const drag=useTaskDrag(onMove,canReorder);
++  const renderSection=(sectionId,name,showCount=true)=>{const items=top.filter(t=>(t.section_id||null)===(sectionId||null));return <section key={sectionId||'none'} className="task-section"><h3>{name}{showCount&&<span>{items.length}</span>}</h3><DraggableRows items={items} sectionId={sectionId} onOpen={onOpen} onToggle={onToggle} canReorder={canReorder} drag={drag}/><InlineAdd onAdd={content=>onInlineAdd(content,sectionId)}/></section>};
++  if(projectId&&sections.length){return <div className="sections-list">{sections.map(s=>renderSection(s.id,s.name))}{renderSection(null,'无分区')}<button className="section-add" onClick={onCreateSection}><Plus size={15}/>添加分区</button></div>}
++  return <div className="task-list">{projectId&&<button className="section-add" onClick={onCreateSection}><Plus size={15}/>添加分区</button>}<DraggableRows items={top} sectionId={null} onOpen={onOpen} onToggle={onToggle} canReorder={canReorder} drag={drag}/><InlineAdd onAdd={c=>onInlineAdd(c,null)}/>{!top.length&&<EmptyState/>}</div>;
+ }
+ function InlineAdd({onAdd}) { const [editing,setEditing]=useState(false),[text,setText]=useState(''); const save=async()=>{if(!text.trim()){setEditing(false);return;}await onAdd(text);setText('');setEditing(false)}; return editing?<div className="inline-add editing"><Circle size={18}/><input autoFocus value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape')setEditing(false)}} onBlur={save} placeholder="任务名称"/></div>:<button className="inline-add" onClick={()=>setEditing(true)}><Plus size={17}/><span>添加任务</span></button>; }
+ function EmptyState(){return <div className="empty-state"><div><CheckCircle2 size={34}/></div><h3>一切井然有序</h3><p>这里暂时没有任务。添加一项新任务开始规划。</p></div>}
+ 
+-function BoardView({tasks,sections,onOpen,onToggle,onInlineAdd}) {
+-  const cols=sections.length?sections:[{id:'none',name:'任务'}];
+-  return <div className="board">{cols.map(s=>{const items=tasks.filter(t=>!t.parent_id&&(s.id==='none'?!t.section_id:t.section_id===s.id));return <div className="board-column" key={s.id}><div className="board-title"><span>{s.name}</span><em>{items.length}</em><MoreHorizontal size={16}/></div>{items.map(t=><div className="task-card" key={t.id} onClick={()=>onOpen(t.id)}><div className="card-top"><TaskCheckbox task={t} onToggle={onToggle}/><span>{t.content}</span></div>{t.description&&<p>{t.description}</p>}<TaskMeta task={t}/></div>)}<InlineAdd onAdd={c=>onInlineAdd(c,s.id==='none'?null:s.id)}/></div>})}</div>;
++function BoardColumn({section,items,onOpen,onToggle,onInlineAdd,canReorder,drag}) {
++  const sectionId=section.id==='none'?null:section.id;
++  return <div className={`board-column ${drag.draggingId?'drag-active':''}`} key={section.id} onDragOver={e=>{if(canReorder)e.preventDefault()}} onDrop={e=>drag.dropEnd(e,sectionId,items)}><div className="board-title"><span>{section.name}</span><em>{items.length}</em><MoreHorizontal size={16}/></div>{items.map(task=><div className={`task-card ${drag.draggingId===task.id?'dragging':''} ${drag.over?.id===task.id?`drop-${drag.over.position}`:''}`} key={task.id} draggable={canReorder} onDragStart={e=>drag.start(e,task.id)} onDragEnd={drag.end} onDragOver={e=>drag.overRow(e,task.id)} onDrop={e=>drag.dropRow(e,items,sectionId,task.id)} onClick={()=>onOpen(task.id)}><div className="card-top"><TaskCheckbox task={task} onToggle={onToggle}/><span>{task.content}</span></div>{task.description&&<p>{task.description}</p>}<TaskMeta task={task}/></div>)}<div className={`board-drop-zone ${drag.draggingId?'active':''}`}>拖到这里移到末尾</div><InlineAdd onAdd={c=>onInlineAdd(c,sectionId)}/></div>;
++}
++function BoardView({tasks,sections,onOpen,onToggle,onInlineAdd,onMove,canReorder}) {
++  const top=tasks.filter(t=>!t.parent_id).sort((a,b)=>a.position-b.position);
++  const drag=useTaskDrag(onMove,canReorder);
++  const hasUnsectioned=top.some(t=>!t.section_id);
++  const cols=sections.length?[...sections,...(hasUnsectioned?[{id:'none',name:'无分区'}]:[])]:[{id:'none',name:'任务'}];
++  return <div className="board">{cols.map(section=>{const items=top.filter(t=>section.id==='none'?!t.section_id:t.section_id===section.id);return <BoardColumn key={section.id} section={section} items={items} onOpen={onOpen} onToggle={onToggle} onInlineAdd={onInlineAdd} canReorder={canReorder} drag={drag}/>})}</div>;
+ }
+ function CalendarView({tasks,onOpen,onToggle}) {
+   const days=Array.from({length:14},(_,i)=>addDays(startOfDay(new Date()),i));
+@@ -202,7 +236,8 @@ function TaskDrawer({taskId,data,onClose,onRefresh,showToast}) {
+         <section className="drawer-section"><h3><MessageSquare size={17}/>评论</h3><div className="comments">{task.comments?.map(c=><div className="comment" key={c.id}><span className="avatar small">{c.user_name.slice(0,1)}</span><div><strong>{c.user_name}<time>{format(new Date(c.created_at),'M月d日 HH:mm')}</time></strong><p>{c.body}</p></div></div>)}</div><div className="comment-box"><span className="avatar small">{data.user.name.slice(0,1)}</span><textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder="写评论……"/><button className="primary compact" onClick={addComment}>发送</button></div></section>
+       </div>
+       <div className="drawer-side">
+-        <Field label="项目"><select value={task.project_id||''} onChange={e=>{const v=e.target.value||null;setTask({...task,project_id:v});save({project_id:v})}}><option value="">收件箱</option>{data.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
++        <Field label="项目"><select value={task.project_id||''} onChange={e=>{const v=e.target.value||null;setTask({...task,project_id:v,section_id:null});save({project_id:v,section_id:null})}}><option value="">收件箱</option>{data.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
++        {task.project_id&&<Field label="分区"><select value={task.section_id||''} onChange={e=>{const v=e.target.value||null;setTask({...task,section_id:v});save({section_id:v})}}><option value="">无分区</option>{data.sections.filter(s=>s.project_id===task.project_id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
+         <Field label="日期"><input type="date" value={task.due_date||''} onChange={e=>{const v=e.target.value||null;setTask({...task,due_date:v});save({due_date:v})}}/></Field>
+         <Field label="截止日期"><input type="date" value={task.deadline_date||''} onChange={e=>{const v=e.target.value||null;setTask({...task,deadline_date:v});save({deadline_date:v})}}/></Field>
+         <Field label="优先级"><select value={task.priority} onChange={e=>{const v=Number(e.target.value);setTask({...task,priority:v});save({priority:v})}}>{[1,2,3,4].map(p=><option key={p} value={p}>P{p}</option>)}</select></Field>
+@@ -281,11 +316,46 @@ export default function App() {
+   const inlineAdd=async(content,section_id)=>{const r=await api('/api/tasks',{method:'POST',body:{content,project_id:active.type==='project'?active.id:null,section_id}});await refresh();showToast('任务已添加');return r.task};
+   const createSection=async()=>{if(active.type!=='project')return;const name=prompt('分区名称');if(!name?.trim())return;await api('/api/sections',{method:'POST',body:{project_id:active.id,name}});await refresh();showToast('分区已创建')};
+   const readNotifications=async()=>{await api('/api/notifications/read',{method:'POST',body:{}});await refresh()};
++  const canReorder=active.type==='project'||active.type==='inbox';
++  const moveTask=async(taskId,targetSectionId,targetIndex)=>{
++    if(!canReorder)return;
++    const snapshot=data;
++    const dragged=data.tasks.find(t=>t.id===taskId);
++    if(!dragged||dragged.parent_id)return;
++    const targetProjectId=active.type==='project'?active.id:null;
++    const oldSectionId=dragged.section_id||null;
++    const normalizedTargetSection=targetProjectId?(targetSectionId||null):null;
++    const relevant=data.tasks.filter(t=>!t.parent_id&&!t.completed_at&&(t.project_id||null)===(targetProjectId||null));
++    const remaining=relevant.filter(t=>t.id!==taskId);
++    const targetItems=remaining.filter(t=>(t.section_id||null)===normalizedTargetSection).sort((a,b)=>a.position-b.position);
++    const safeIndex=Math.max(0,Math.min(Number(targetIndex)||0,targetItems.length));
++    const project=data.projects.find(p=>p.id===targetProjectId);
++    const section=data.sections.find(s=>s.id===normalizedTargetSection);
++    const moved={...dragged,project_id:targetProjectId,section_id:normalizedTargetSection,project_name:project?.name||null,project_color:project?.color||null,section_name:section?.name||null};
++    targetItems.splice(safeIndex,0,moved);
++    const affectedSections=new Set([oldSectionId,normalizedTargetSection]);
++    const updated=new Map();
++    for(const sectionId of affectedSections){
++      const bucket=sectionId===normalizedTargetSection?targetItems:remaining.filter(t=>(t.section_id||null)===sectionId).sort((a,b)=>a.position-b.position);
++      bucket.forEach((task,index)=>updated.set(task.id,{...task,position:(index+1)*1024}));
++    }
++    const optimisticTasks=data.tasks.map(task=>updated.get(task.id)||task);
++    setData({...data,tasks:optimisticTasks});
++    try{
++      const items=[...updated.values()].map(task=>({id:task.id,project_id:task.project_id||null,section_id:task.section_id||null,position:task.position}));
++      const response=await api('/api/tasks/reorder',{method:'POST',body:{items}});
++      const saved=new Map(response.tasks.map(task=>[task.id,task]));
++      setData(current=>({...current,tasks:current.tasks.map(task=>saved.get(task.id)||task)}));
++    }catch(error){
++      setData(snapshot);
++      showToast(`移动失败：${error.message}`,'error');
++    }
++  };
+   return <div className="app-shell">
+     <Sidebar data={data} active={active} setActive={setActive} collapsed={collapsed} setCollapsed={setCollapsed} onQuickAdd={()=>setQuickOpen(true)} onSearch={()=>setSearchOpen(true)} onCreateProject={()=>setProjectOpen(true)} onSettings={()=>setSettingsOpen(true)} onLogout={logout}/>
+     <main className="main-content"><Header title={title} subtitle={subtitle} viewMode={viewMode} setViewMode={setViewOverride} onQuickAdd={()=>setQuickOpen(true)} onMenu={()=>setCollapsed(false)} sidebarCollapsed={collapsed} onNotifications={()=>setNotificationsOpen(!notificationsOpen)} unread={data.notifications.filter(n=>!n.read_at).length}/><div className={`content-body ${viewMode}`}>
+-      {viewMode==='list'&&<ListView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} projectId={active.type==='project'?active.id:null} onCreateSection={createSection}/>} 
+-      {viewMode==='board'&&<BoardView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd}/>} 
++      {viewMode==='list'&&<ListView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} projectId={active.type==='project'?active.id:null} onCreateSection={createSection} onMove={moveTask} canReorder={canReorder}/>} 
++      {viewMode==='board'&&<BoardView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} onMove={moveTask} canReorder={canReorder}/>} 
+       {viewMode==='calendar'&&<CalendarView tasks={visible} onOpen={setTaskId} onToggle={toggle}/>} 
+     </div></main>
+     <NotificationPanel open={notificationsOpen} onClose={()=>setNotificationsOpen(false)} notifications={data.notifications} onOpenTask={setTaskId} onRead={readNotifications}/>
