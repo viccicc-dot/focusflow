@@ -37,8 +37,11 @@ jobs:
         run: |
           node -e "JSON.parse(require('fs').readFileSync('railway.json', 'utf8'))"
           ruby -e "require 'yaml'; data = YAML.load_file('render.yaml'); abort 'render.yaml services missing' unless data['services'].is_a?(Array) && !data['services'].empty?"
-          test -f "启动FocusFlow.bat"
-          grep -q "npm.cmd run dev" "启动FocusFlow.bat"
+          test -f "Start-FocusFlow.cmd"
+          test ! -f "启动FocusFlow.bat"
+          grep -q "npm.cmd ci --no-audit --no-fund" "Start-FocusFlow.cmd"
+          grep -q "choice /C YN" "Start-FocusFlow.cmd"
+          if grep -qi "powershell.exe\|WindowStyle Hidden" "Start-FocusFlow.cmd"; then exit 1; fi
           grep -q "/api/health" render.yaml
           grep -q '"/api/health"' railway.json
 
