@@ -39,6 +39,7 @@ jobs:
           ruby -e "require 'yaml'; data = YAML.load_file('render.yaml'); abort 'render.yaml services missing' unless data['services'].is_a?(Array) && !data['services'].empty?"
           test -f "Start-FocusFlow.cmd"
           test ! -f "启动FocusFlow.bat"
+          grep -q "npm.cmd install --no-audit --no-fund" "Start-FocusFlow.cmd"
           grep -q "npm.cmd ci --no-audit --no-fund" "Start-FocusFlow.cmd"
           grep -q "choice /C YN" "Start-FocusFlow.cmd"
           if grep -qi "powershell.exe\|WindowStyle Hidden" "Start-FocusFlow.cmd"; then exit 1; fi
@@ -54,7 +55,7 @@ jobs:
 
   windows-launcher:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,6 +65,10 @@ jobs:
         with:
           node-version: 22
 
-      - name: Execute launcher smoke test in cmd.exe
+      - name: Execute launcher syntax check in cmd.exe
         shell: cmd
         run: Start-FocusFlow.cmd --check
+
+      - name: Execute real dependency install path in cmd.exe
+        shell: cmd
+        run: Start-FocusFlow.cmd --ci-install
