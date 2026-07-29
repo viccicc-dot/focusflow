@@ -31,6 +31,18 @@
 
 支持：`今天`、`明天`、`后天`、`YYYY-MM-DD`、`每天`、`每周`、`每月`、`每年`、`工作日`、`#项目`、`@标签`、`p1` 到 `p4`。
 
+## Windows 一键启动
+
+要求 Node.js 22 或更高版本。完整解压 ZIP 后，可以双击：
+
+```text
+Start-FocusFlow.cmd
+```
+
+首次运行时，脚本会明确询问是否从 npm 注册表安装 `package-lock.json` 锁定的依赖；所有命令均显示在可见窗口中。脚本不会调用 PowerShell、不会隐藏窗口，也不会请求管理员权限。详细说明见 `WINDOWS_LAUNCHER_SECURITY.md`。
+
+旧的 `启动FocusFlow.bat` 已因不够透明的隐藏 PowerShell 写法被删除。请不要恢复旧文件，也不要为旧文件添加安全软件白名单。
+
 ## 本地运行
 
 要求 Node.js 22 或更高版本。
