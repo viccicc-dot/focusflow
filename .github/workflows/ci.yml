@@ -7,63 +7,9 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  integrate-smart-tables:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feature/smart-tables-phase-1'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Apply integration patch when needed
-        run: |
-          if grep -q "SmartTablePage" client/src/App.jsx; then
-            echo "Integration already applied."
-          else
-            node scripts/apply-smart-tables-phase1.mjs
-          fi
-
-      - name: Install and verify generated code
-        run: |
-          npm install --no-audit --no-fund
-          node --check server/db.js
-          node --check server/index.js
-          node --check server/smart-tables.js
-          npm run build
-
-      - name: Verify database schema
-        env:
-          DATABASE_PATH: ./data/phase1-pr-ci.db
-          SEED_DEMO: 'false'
-        run: |
-          node -e "import('./server/db.js').then(({initDb,db})=>{initDb(); const names=db.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'smart_%' ORDER BY name\").all(); if(names.length!==5) throw new Error('Expected 5 smart table schema objects'); console.log(names); db.close();})"
-
-      - name: Commit integration when changed
-        run: |
-          if git diff --quiet; then
-            echo "No generated changes to commit."
-            exit 0
-          fi
-          sed -i 's/[[:space:]]\+$//' client/src/App.jsx
-          git checkout -- .github/workflows/ci.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add server/db.js server/index.js client/src/App.jsx
-          git diff --cached --check
-          git commit -m "feat: integrate smart tables into FocusFlow"
-          git push origin HEAD:${{ github.head_ref }}
-
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -86,7 +32,14 @@ jobs:
           node --check server/recurrence.js
           node --check server/seed-data.js
           node --check server/seed.js
-          if [ -f server/smart-tables.js ]; then node --check server/smart-tables.js; fi
+          node --check server/smart-tables.js
+
+      - name: Verify smart table database schema
+        env:
+          DATABASE_PATH: ./data/smart-table-ci.db
+          SEED_DEMO: 'false'
+        run: |
+          node -e "import('./server/db.js').then(({initDb,db})=>{initDb(); const names=db.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'smart_%' ORDER BY name\").all(); if(names.length!==5) throw new Error('Expected 5 smart table schema objects'); console.log(names); db.close();})"
 
       - name: Validate launch and deployment configs
         run: |
