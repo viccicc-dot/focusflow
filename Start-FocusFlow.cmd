@@ -23,6 +23,13 @@ if /I "%~1"=="--check" (
   exit /b 0
 )
 
+set "AUTO_INSTALL=0"
+set "INSTALL_ONLY=0"
+if /I "%~1"=="--ci-install" (
+  set "AUTO_INSTALL=1"
+  set "INSTALL_ONLY=1"
+)
+
 if not exist ".env" (
   if not exist ".env.example" goto missing_env
   copy /Y ".env.example" ".env" >nul
@@ -32,14 +39,26 @@ if not exist ".env" (
 if not exist "node_modules" (
   echo.
   echo Project dependencies are not installed yet.
-  echo The next step downloads locked packages from the npm registry.
-  choice /C YN /N /M "Install dependencies now? [Y/N]: "
-  if errorlevel 2 goto cancelled
+  echo The next step downloads packages from the npm registry.
+  if "%AUTO_INSTALL%"=="0" (
+    choice /C YN /N /M "Install dependencies now? [Y/N]: "
+    if errorlevel 2 goto cancelled
+  )
 
   echo.
-  echo Running npm ci --no-audit --no-fund ...
-  call npm.cmd ci --no-audit --no-fund
+  if exist "package-lock.json" (
+    echo Running npm ci --no-audit --no-fund ...
+    call npm.cmd ci --no-audit --no-fund
+  ) else (
+    echo No package-lock.json found. Running npm install --no-audit --no-fund ...
+    call npm.cmd install --no-audit --no-fund
+  )
   if errorlevel 1 goto install_failed
+)
+
+if "%INSTALL_ONLY%"=="1" (
+  echo Windows dependency installation test passed.
+  exit /b 0
 )
 
 echo.
@@ -77,7 +96,7 @@ goto failed
 
 :install_failed
 echo ERROR: npm dependency installation failed.
-echo Check your network or npm registry settings.
+echo Review the npm error shown above.
 goto failed
 
 :cancelled
