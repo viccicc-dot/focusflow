@@ -176,6 +176,67 @@ export function initDb() {
       updated_at TEXT NOT NULL
     );
 
+
+    CREATE TABLE IF NOT EXISTS smart_tables (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      owner_id TEXT NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      color TEXT NOT NULL DEFAULT '#7c3aed',
+      position REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS smart_fields (
+      id TEXT PRIMARY KEY,
+      table_id TEXT NOT NULL REFERENCES smart_tables(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      position REAL NOT NULL DEFAULT 0,
+      width INTEGER NOT NULL DEFAULT 180,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS smart_records (
+      id TEXT PRIMARY KEY,
+      table_id TEXT NOT NULL REFERENCES smart_tables(id) ON DELETE CASCADE,
+      position REAL NOT NULL DEFAULT 0,
+      task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS smart_values (
+      record_id TEXT NOT NULL REFERENCES smart_records(id) ON DELETE CASCADE,
+      field_id TEXT NOT NULL REFERENCES smart_fields(id) ON DELETE CASCADE,
+      value_json TEXT NOT NULL DEFAULT 'null',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(record_id, field_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS smart_views (
+      id TEXT PRIMARY KEY,
+      table_id TEXT NOT NULL REFERENCES smart_tables(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'grid',
+      config_json TEXT NOT NULL DEFAULT '{}',
+      position REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_smart_tables_workspace ON smart_tables(workspace_id);
+    CREATE INDEX IF NOT EXISTS idx_smart_fields_table ON smart_fields(table_id);
+    CREATE INDEX IF NOT EXISTS idx_smart_records_table ON smart_records(table_id);
+    CREATE INDEX IF NOT EXISTS idx_smart_records_task ON smart_records(task_id);
+
+
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

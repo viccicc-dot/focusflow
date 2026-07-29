@@ -12,6 +12,7 @@ import { addDays, format, isBefore, parseISO, startOfDay } from 'date-fns';
 import { db, id, initDb, now, getWorkspaceForUser, assertWorkspaceAccess, taskWithRelations } from './db.js';
 import { createAccount } from './seed-data.js';
 import { nextRecurringDate } from './recurrence.js';
+import { registerSmartTableRoutes, smartTableSummaries } from './smart-tables.js';
 
 initDb();
 await createAccount({ email: 'demo@focusflow.local', name: '演示用户', password: 'demo1234', demo: true });
@@ -128,6 +129,8 @@ function createDueNotifications(userId, workspaceId) {
   tx();
 }
 
+registerSmartTableRoutes(app, auth);
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'focusflow', time: now() }));
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {
@@ -177,7 +180,8 @@ app.get('/api/bootstrap', auth, (req, res) => {
   const filters = db.prepare('SELECT * FROM filters WHERE workspace_id = ? AND user_id = ? ORDER BY is_favorite DESC,name').all(req.workspace.id, req.user.id);
   const members = db.prepare(`SELECT u.id,u.name,u.email,u.avatar_url,m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=? ORDER BY u.name`).all(req.workspace.id);
   const notifications = db.prepare('SELECT * FROM notifications WHERE workspace_id=? AND user_id=? ORDER BY created_at DESC LIMIT 50').all(req.workspace.id, req.user.id);
-  res.json({ user: publicUser(req.user), workspace: req.workspace, projects, sections, tasks: hydrateTasks(req.workspace.id), labels, filters, members, notifications });
+  const smartTables = smartTableSummaries(req.workspace.id);
+  res.json({ user: publicUser(req.user), workspace: req.workspace, projects, sections, tasks: hydrateTasks(req.workspace.id), labels, filters, members, notifications, smartTables });
 });
 
 app.patch('/api/profile', auth, (req, res) => {

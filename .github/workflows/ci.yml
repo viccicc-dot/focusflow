@@ -32,6 +32,14 @@ jobs:
           node --check server/recurrence.js
           node --check server/seed-data.js
           node --check server/seed.js
+          node --check server/smart-tables.js
+
+      - name: Verify smart table database schema
+        env:
+          DATABASE_PATH: ./data/smart-table-ci.db
+          SEED_DEMO: 'false'
+        run: |
+          node -e "import('./server/db.js').then(({initDb,db})=>{initDb(); const names=db.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'smart_%' ORDER BY name\").all(); if(names.length!==5) throw new Error('Expected 5 smart table schema objects'); console.log(names); db.close();})"
 
       - name: Validate launch and deployment configs
         run: |
