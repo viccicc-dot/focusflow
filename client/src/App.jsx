@@ -9,6 +9,7 @@ import {
 import { addDays, format, isAfter, isBefore, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { api } from './api.js';
+import { SmartTablePage, UnifiedCalendar } from './SmartTable.jsx';
 
 const todayISO = () => format(new Date(), 'yyyy-MM-dd');
 const COLORS = ['#dc2626','#ea580c','#d97706','#65a30d','#059669','#0891b2','#2563eb','#7c3aed','#db2777','#64748b'];
@@ -41,8 +42,8 @@ function AuthScreen({ onAuth }) {
     <div className="auth-brand"><div className="brand-mark"><Check size={24}/></div><span>FocusFlow</span></div>
     <div className="auth-card">
       <div className="auth-icon"><Sparkles size={26}/></div>
-      <h1>{mode === 'login' ? '欢迎回来' : '创建你的工作空间'}</h1>
-      <p>{mode === 'login' ? '登录后继续整理工作与生活。' : '任务、项目和团队协作都集中在一个地方。'}</p>
+      <h1>{mode === 'login' ? '欢迎回来' : '创建你的个人空间'}</h1>
+      <p>{mode === 'login' ? '登录后继续整理工作与生活。' : '任务、项目、表格和日历都集中在一个地方。'}</p>
       <form onSubmit={submit}>
         {mode === 'register' && <label>姓名<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="你的名字" required /></label>}
         <label>邮箱<input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="name@example.com" required /></label>
@@ -56,8 +57,9 @@ function AuthScreen({ onAuth }) {
   </div>;
 }
 
-function Sidebar({ data, active, setActive, collapsed, setCollapsed, onQuickAdd, onSearch, onCreateProject, onSettings, onLogout }) {
+function Sidebar({ data, active, setActive, collapsed, setCollapsed, onQuickAdd, onSearch, onCreateProject, onCreateSmartTable, onSettings, onLogout }) {
   const [projectsOpen, setProjectsOpen] = useState(true);
+  const [tablesOpen, setTablesOpen] = useState(true);
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const rootProjects = data.projects.filter(p=>!p.parent_id);
@@ -65,9 +67,9 @@ function Sidebar({ data, active, setActive, collapsed, setCollapsed, onQuickAdd,
   const today = todayISO();
   const nav = [
     ['search','搜索',Search,0,onSearch],
-    ['inbox','收件箱',Inbox,count(t=>!t.project_id)],
+    ['pending','待处理',Inbox,count(t=>!t.project_id)],
     ['today','今天',CalendarDays,count(t=>t.due_date && t.due_date<=today)],
-    ['upcoming','预览',CalendarRange,count(t=>t.due_date && t.due_date>today)],
+    ['calendar','日历',CalendarRange,count(t=>t.due_date && t.due_date>today)],
   ];
   return <aside className={`sidebar ${collapsed?'collapsed':''}`}>
     <div className="sidebar-top">
@@ -88,6 +90,9 @@ function Sidebar({ data, active, setActive, collapsed, setCollapsed, onQuickAdd,
       <SidebarGroup title="我的项目" icon={projectsOpen?<ChevronDown/>:<ChevronRight/>} open={projectsOpen} setOpen={setProjectsOpen} action={onCreateProject}>
         {rootProjects.map(p=><ProjectTree key={p.id} project={p} projects={data.projects} active={active} setActive={setActive}/>) }
       </SidebarGroup>
+      <SidebarGroup title="智能表格" icon={tablesOpen?<ChevronDown/>:<ChevronRight/>} open={tablesOpen} setOpen={setTablesOpen} action={onCreateSmartTable}>
+        {(data.smartTables||[]).map(table=><button key={table.id} className={`small-nav ${active.type==='smartTable'&&active.id===table.id?'active':''}`} onClick={()=>setActive({type:'smartTable',id:table.id})}><Columns3 size={15} style={{color:table.color}}/><span>{table.name}</span><em>{table.record_count||0}</em></button>)}
+      </SidebarGroup>
       <SidebarGroup title="标签" icon={labelsOpen?<ChevronDown/>:<ChevronRight/>} open={labelsOpen} setOpen={setLabelsOpen}>
         {data.labels.map(l=><button key={l.id} className={`small-nav ${active.type==='label'&&active.id===l.id?'active':''}`} onClick={()=>setActive({type:'label',id:l.id})}><Hash size={15} style={{color:l.color}}/><span>{l.name}</span></button>)}
       </SidebarGroup>
@@ -96,7 +101,7 @@ function Sidebar({ data, active, setActive, collapsed, setCollapsed, onQuickAdd,
       </SidebarGroup>
     </div>}
     <div className="sidebar-bottom">
-      <button className="nav-item" onClick={onSettings}><Settings size={18}/>{!collapsed&&<span>设置与团队</span>}</button>
+      <button className="nav-item" onClick={onSettings}><Settings size={18}/>{!collapsed&&<span>设置</span>}</button>
       <button className="nav-item" onClick={onLogout}><LogOut size={18}/>{!collapsed&&<span>退出登录</span>}</button>
     </div>
   </aside>;
@@ -137,7 +142,7 @@ function QuickAdd({open,onClose,data,onCreated,defaultProjectId}) {
     <div className="quick-help">支持：今天 / 明天 / 2026-08-01 / 每周 / #项目 / @标签 / p1</div>
     <div className="quick-controls">
       <input type="date" value={details.due_date||''} onChange={e=>setDetails({...details,due_date:e.target.value||null})}/>
-      <select value={details.project_id||''} onChange={e=>setDetails({...details,project_id:e.target.value||null})}><option value="">收件箱</option>{data.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
+      <select value={details.project_id||''} onChange={e=>setDetails({...details,project_id:e.target.value||null})}><option value="">待处理</option>{data.projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
       <select value={details.priority} onChange={e=>setDetails({...details,priority:Number(e.target.value)})}>{[1,2,3,4].map(p=><option key={p} value={p}>优先级 {p}</option>)}</select>
       <button className="primary" disabled={saving}>{saving?<Loader2 size={17} className="spin"/>:'添加任务'}</button>
     </div>
@@ -268,7 +273,7 @@ function SettingsModal({open,onClose,data,onRefresh,onTheme,onLogout,showToast})
   const inviteMember=async()=>{const r=await api('/api/team/invite',{method:'POST',body:invite});setInvite({email:'',role:'member'});await onRefresh();showToast(r.joined?'成员已加入':'邀请已记录；接入邮件服务后可自动发送')};
   const createLabel=async()=>{await api('/api/labels',{method:'POST',body:label});setLabel({name:'',color:COLORS[9]});await onRefresh()};
   const createFilter=async()=>{await api('/api/filters',{method:'POST',body:filter});setFilter({name:'',query:'',color:COLORS[6]});await onRefresh()};
-  return <Modal title="设置" onClose={onClose} wide><div className="settings-layout"><nav><button className={tab==='profile'?'active':''} onClick={()=>setTab('profile')}><UserRound size={17}/>账户与外观</button><button className={tab==='team'?'active':''} onClick={()=>setTab('team')}><Users size={17}/>团队</button><button className={tab==='labels'?'active':''} onClick={()=>setTab('labels')}><Tags size={17}/>标签</button><button className={tab==='filters'?'active':''} onClick={()=>setTab('filters')}><Filter size={17}/>筛选器</button><button onClick={onLogout}><LogOut size={17}/>退出登录</button></nav><div className="settings-content">
+  return <Modal title="设置" onClose={onClose} wide><div className="settings-layout"><nav><button className={tab==='profile'?'active':''} onClick={()=>setTab('profile')}><UserRound size={17}/>账户与外观</button><button className={tab==='labels'?'active':''} onClick={()=>setTab('labels')}><Tags size={17}/>标签</button><button className={tab==='filters'?'active':''} onClick={()=>setTab('filters')}><Filter size={17}/>筛选器</button><button onClick={onLogout}><LogOut size={17}/>退出登录</button></nav><div className="settings-content">
     {tab==='profile'&&<><h2>账户与外观</h2><div className="stack-form"><label>姓名<input value={profile.name} onChange={e=>setProfile({...profile,name:e.target.value})}/></label><label>主题<select value={profile.theme} onChange={e=>setProfile({...profile,theme:e.target.value})}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label><label>时区<input value={profile.timezone} onChange={e=>setProfile({...profile,timezone:e.target.value})}/></label><button className="primary fit" onClick={saveProfile}>保存设置</button></div></>}
     {tab==='team'&&<><h2>团队成员</h2><div className="member-list">{data.members.map(m=><div key={m.id}><span className="avatar">{m.name.slice(0,1)}</span><div><strong>{m.name}</strong><small>{m.email}</small></div><em>{m.role}</em></div>)}</div><h3>邀请成员</h3><div className="inline-form"><input type="email" value={invite.email} onChange={e=>setInvite({...invite,email:e.target.value})} placeholder="member@example.com"/><select value={invite.role} onChange={e=>setInvite({...invite,role:e.target.value})}><option value="member">成员</option><option value="admin">管理员</option><option value="guest">访客</option></select><button className="primary" onClick={inviteMember}>邀请</button></div><p className="muted">未接入邮件服务时，邀请会保存在数据库中；已注册用户会立即加入。</p></>}
     {tab==='labels'&&<><h2>标签</h2><div className="chip-list">{data.labels.map(l=><span key={l.id}><i style={{background:l.color}}/>@{l.name}</span>)}</div><h3>新建标签</h3><div className="inline-form"><input value={label.name} onChange={e=>setLabel({...label,name:e.target.value})} placeholder="标签名称"/><input type="color" value={label.color} onChange={e=>setLabel({...label,color:e.target.value})}/><button className="primary" onClick={createLabel}>添加</button></div></>}
@@ -303,11 +308,11 @@ export default function App() {
   useEffect(()=>{const handler=e=>{if((e.key==='q'||e.key==='Q')&&!/INPUT|TEXTAREA/.test(document.activeElement?.tagName)){e.preventDefault();setQuickOpen(true)}if((e.key==='/'||(e.key.toLowerCase()==='k'&&(e.ctrlKey||e.metaKey)))&&!/INPUT|TEXTAREA/.test(document.activeElement?.tagName)){e.preventDefault();setSearchOpen(true)}if(e.key==='Escape'){setQuickOpen(false);setSearchOpen(false);setTaskId(null)}};window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler)},[]);
   useEffect(()=>{if(window.matchMedia('(max-width: 900px)').matches)setCollapsed(true)},[]);
   const logout=async()=>{await api('/api/auth/logout',{method:'POST'});setData(null);setStatus('auth')};
-  const currentProject=data?.projects.find(p=>p.id===active.id); const currentLabel=data?.labels.find(l=>l.id===active.id); const currentFilter=data?.filters.find(f=>f.id===active.id);
-  const visible=useMemo(()=>{if(!data)return[];const tasks=data.tasks;const today=todayISO();switch(active.type){case'inbox':return tasks.filter(t=>!t.project_id&&!t.completed_at);case'today':return tasks.filter(t=>!t.completed_at&&t.due_date&&t.due_date<=today);case'upcoming':return tasks.filter(t=>!t.completed_at&&t.due_date&&t.due_date>today);case'completed':return tasks.filter(t=>t.completed_at);case'project':return tasks.filter(t=>t.project_id===active.id&&!t.completed_at);case'label':return tasks.filter(t=>!t.completed_at&&t.labels?.some(l=>l.id===active.id));case'filter':return applyFilterQuery(tasks.filter(t=>!t.completed_at),currentFilter?.query||'',data);default:return tasks.filter(t=>!t.completed_at)}},[data,active,currentFilter]);
-  const title=active.type==='inbox'?'收件箱':active.type==='today'?'今天':active.type==='upcoming'?'预览':active.type==='completed'?'已完成':currentProject?.name||currentLabel?.name||currentFilter?.name||'任务';
+  const currentProject=data?.projects.find(p=>p.id===active.id); const currentLabel=data?.labels.find(l=>l.id===active.id); const currentFilter=data?.filters.find(f=>f.id===active.id); const currentSmartTable=data?.smartTables?.find(table=>table.id===active.id);
+  const visible=useMemo(()=>{if(!data)return[];const tasks=data.tasks;const today=todayISO();switch(active.type){case'pending':return tasks.filter(t=>!t.project_id&&!t.completed_at);case'today':return tasks.filter(t=>!t.completed_at&&t.due_date&&t.due_date<=today);case'calendar':return tasks.filter(t=>!t.completed_at);case'completed':return tasks.filter(t=>t.completed_at);case'project':return tasks.filter(t=>t.project_id===active.id&&!t.completed_at);case'label':return tasks.filter(t=>!t.completed_at&&t.labels?.some(l=>l.id===active.id));case'filter':return applyFilterQuery(tasks.filter(t=>!t.completed_at),currentFilter?.query||'',data);default:return tasks.filter(t=>!t.completed_at)}},[data,active,currentFilter]);
+  const title=active.type==='pending'?'待处理':active.type==='today'?'今天':active.type==='calendar'?'日历':active.type==='smartTable'?currentSmartTable?.name:active.type==='completed'?'已完成':currentProject?.name||currentLabel?.name||currentFilter?.name||'任务';
   const subtitle=active.type==='today'?format(new Date(),'M月d日 EEEE',{locale:zhCN}):active.type==='filter'?currentFilter?.query:null;
-  const viewMode=viewOverride||currentProject?.view_mode||(active.type==='upcoming'?'calendar':'list');
+  const viewMode=viewOverride||currentProject?.view_mode||'list';
   useEffect(()=>setViewOverride(null),[active.type,active.id]);
   if(status==='loading')return <div className="app-loading"><div className="brand-mark"><Check size={24}/></div><Loader2 className="spin"/></div>;
   if(status==='auth')return <AuthScreen onAuth={load}/>;
@@ -316,7 +321,8 @@ export default function App() {
   const inlineAdd=async(content,section_id)=>{const r=await api('/api/tasks',{method:'POST',body:{content,project_id:active.type==='project'?active.id:null,section_id}});await refresh();showToast('任务已添加');return r.task};
   const createSection=async()=>{if(active.type!=='project')return;const name=prompt('分区名称');if(!name?.trim())return;await api('/api/sections',{method:'POST',body:{project_id:active.id,name}});await refresh();showToast('分区已创建')};
   const readNotifications=async()=>{await api('/api/notifications/read',{method:'POST',body:{}});await refresh()};
-  const canReorder=active.type==='project'||active.type==='inbox';
+  const createSmartTable=async()=>{const name=window.prompt('智能表格名称','我的智能表格');if(!name?.trim())return;try{const result=await api('/api/smart-tables',{method:'POST',body:{name:name.trim()}});await refresh();setActive({type:'smartTable',id:result.table.id});showToast('智能表格已创建')}catch(error){showToast(error.message,'error')}};
+  const canReorder=active.type==='project'||active.type==='pending';
   const moveTask=async(taskId,targetSectionId,targetIndex)=>{
     if(!canReorder)return;
     const snapshot=data;
@@ -352,12 +358,18 @@ export default function App() {
     }
   };
   return <div className="app-shell">
-    <Sidebar data={data} active={active} setActive={setActive} collapsed={collapsed} setCollapsed={setCollapsed} onQuickAdd={()=>setQuickOpen(true)} onSearch={()=>setSearchOpen(true)} onCreateProject={()=>setProjectOpen(true)} onSettings={()=>setSettingsOpen(true)} onLogout={logout}/>
-    <main className="main-content"><Header title={title} subtitle={subtitle} viewMode={viewMode} setViewMode={setViewOverride} onQuickAdd={()=>setQuickOpen(true)} onMenu={()=>setCollapsed(false)} sidebarCollapsed={collapsed} onNotifications={()=>setNotificationsOpen(!notificationsOpen)} unread={data.notifications.filter(n=>!n.read_at).length}/><div className={`content-body ${viewMode}`}>
-      {viewMode==='list'&&<ListView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} projectId={active.type==='project'?active.id:null} onCreateSection={createSection} onMove={moveTask} canReorder={canReorder}/>} 
-      {viewMode==='board'&&<BoardView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} onMove={moveTask} canReorder={canReorder}/>} 
-      {viewMode==='calendar'&&<CalendarView tasks={visible} onOpen={setTaskId} onToggle={toggle}/>} 
-    </div></main>
+    <Sidebar data={data} active={active} setActive={setActive} collapsed={collapsed} setCollapsed={setCollapsed} onQuickAdd={()=>setQuickOpen(true)} onSearch={()=>setSearchOpen(true)} onCreateProject={()=>setProjectOpen(true)} onCreateSmartTable={createSmartTable} onSettings={()=>setSettingsOpen(true)} onLogout={logout}/>
+    <main className="main-content">
+      {active.type==='smartTable'&&currentSmartTable
+        ? <SmartTablePage summary={currentSmartTable} showToast={showToast} onChanged={refresh}/>
+        : active.type==='calendar'
+          ? <UnifiedCalendar onOpenTask={setTaskId} onOpenSmartTable={(tableId,recordId)=>setActive({type:'smartTable',id:tableId,recordId})} onQuickAdd={()=>setQuickOpen(true)} showToast={showToast}/>
+          : <><Header title={title} subtitle={subtitle} viewMode={viewMode} setViewMode={setViewOverride} onQuickAdd={()=>setQuickOpen(true)} onMenu={()=>setCollapsed(false)} sidebarCollapsed={collapsed} onNotifications={()=>setNotificationsOpen(!notificationsOpen)} unread={data.notifications.filter(n=>!n.read_at).length}/><div className={`content-body ${viewMode}`}>
+              {viewMode==='list'&&<ListView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} projectId={active.type==='project'?active.id:null} onCreateSection={createSection} onMove={moveTask} canReorder={canReorder}/>}
+              {viewMode==='board'&&<BoardView tasks={visible} sections={active.type==='project'?data.sections.filter(s=>s.project_id===active.id):[]} onOpen={setTaskId} onToggle={toggle} onInlineAdd={inlineAdd} onMove={moveTask} canReorder={canReorder}/>}
+              {viewMode==='calendar'&&<CalendarView tasks={visible} onOpen={setTaskId} onToggle={toggle}/>}
+            </div></>}
+    </main>
     <NotificationPanel open={notificationsOpen} onClose={()=>setNotificationsOpen(false)} notifications={data.notifications} onOpenTask={setTaskId} onRead={readNotifications}/>
     <QuickAdd open={quickOpen} onClose={()=>setQuickOpen(false)} data={data} defaultProjectId={active.type==='project'?active.id:null} onCreated={async()=>{await refresh();showToast('任务已添加')}}/>
     <SearchOverlay open={searchOpen} onClose={()=>setSearchOpen(false)} data={data} onOpen={setTaskId}/>
