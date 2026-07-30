@@ -1,0 +1,52 @@
+name: Apply Smart Table Redesign
+
+on:
+  push:
+    branches: [feature/smart-tables-phase-2]
+    paths:
+      - scripts/apply-smart-table-redesign.mjs
+      - .github/workflows/apply-smart-table-redesign.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/smart-tables-phase-2
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply redesign files
+        run: node scripts/apply-smart-table-redesign.mjs
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify server and client
+        run: |
+          node --check server/smart-tables.js
+          node --check server/seed-data.js
+          npm run build
+
+      - name: Commit generated redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/src/SmartTable.jsx client/src/smart-table.css server/smart-tables.js server/seed-data.js
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "feat: rebuild smart table as a direct-edit workspace"
+          git push origin HEAD:feature/smart-tables-phase-2
