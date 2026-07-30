@@ -13,7 +13,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    permissions: ['clipboard-read', 'clipboard-write']
+    permissions: ['clipboard-read', 'clipboard-write'],
+    viewport: { width: 1280, height: 720 }
   },
   projects: [
     {
@@ -22,9 +23,18 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: 'node scripts/start-e2e.mjs',
+    command: 'node scripts/start-e2e.mjs && npm run dev',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000
+    timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: {
+      DATABASE_PATH: './data/focusflow-e2e.db',
+      UPLOAD_DIR: './uploads-e2e',
+      SEED_DEMO: 'true',
+      JWT_SECRET: 'focusflow-e2e-secret',
+      NODE_ENV: 'test'
+    }
   }
 });
