@@ -99,7 +99,7 @@ export function registerSmartRecordExtraRoutes(app, auth) {
       JOIN smart_fields f ON f.id=h.field_id
       LEFT JOIN users u ON u.id=h.user_id
       WHERE ${where}
-      ORDER BY h.created_at DESC
+      ORDER BY h.rowid DESC
       LIMIT 300
     `).all(...params).map(item => ({
       ...item,
@@ -132,7 +132,7 @@ export function registerSmartRecordExtraRoutes(app, auth) {
       LEFT JOIN smart_fields f ON f.id=c.field_id
       JOIN users u ON u.id=c.user_id
       WHERE c.record_id=?
-      ORDER BY c.created_at
+      ORDER BY c.rowid
     `).all(record.id);
     res.json({comments});
   });
