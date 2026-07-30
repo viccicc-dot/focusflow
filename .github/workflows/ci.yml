@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Check server syntax
+      - name: Check server and test syntax
         run: |
           node --check server/index.js
           node --check server/db.js
@@ -35,6 +35,9 @@ jobs:
           node --check server/smart-tables.js
           node --check server/smart-record-extras.js
           node --check scripts/test-smart-record-extras.mjs
+          node --check scripts/start-e2e.mjs
+          node --check playwright.config.js
+          node --check tests/e2e/smart-table-context.spec.js
 
       - name: Verify smart table database schema
         env:
@@ -47,7 +50,7 @@ jobs:
         env:
           DATABASE_PATH: ./data/smart-record-extras-ci.db
           SEED_DEMO: 'false'
-        run: node scripts/test-smart-record-extras.mjs
+        run: npm run test:smart-record-extras
 
       - name: Validate launch and deployment configs
         run: |
@@ -68,6 +71,38 @@ jobs:
 
       - name: Build Docker image
         run: docker build --tag focusflow-ci .
+
+  smart-table-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smart table browser acceptance tests
+        run: npm run test:e2e
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-table-playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
   windows-launcher:
     runs-on: windows-latest
