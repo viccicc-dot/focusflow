@@ -154,7 +154,7 @@ test('插入、复制、筛选、清空、历史恢复和删除都写入数据�
   await menu.getByRole('button', { name: '查看此单元格历史' }).click();
   const panel = page.getByLabel('记录详情');
   await expect(panel).toBeVisible();
-  await expect(panel.getByText(fixture.originalValue, { exact: true })).toBeVisible();
+  await expect(panel.getByRole('deletion').filter({ hasText: fixture.originalValue }).first()).toBeVisible();
   await panel.getByRole('button', { name: '还原' }).first().click();
   await expect.poll(() => recordValue(page, fixture)).toBe(fixture.originalValue);
   await panel.locator('header button').click();
