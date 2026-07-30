@@ -7,6 +7,12 @@ async function login(page) {
   await expect(page.getByText('智能表格', { exact: true })).toBeVisible();
 }
 
+async function selectTable(page, tableName) {
+  const tableButton = page.locator('.small-nav').filter({ hasText: tableName });
+  await expect(tableButton).toBeVisible();
+  await tableButton.click();
+}
+
 async function createFixture(page, label) {
   const tableName = `验收-${label}-${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
   const tableResponse = await page.request.post('/api/smart-tables', { data: { name: tableName, color: '#7c3aed' } });
@@ -21,9 +27,7 @@ async function createFixture(page, label) {
   const { record } = await recordResponse.json();
 
   await page.reload();
-  const tableButton = page.locator('.small-nav').filter({ hasText: tableName });
-  await expect(tableButton).toBeVisible();
-  await tableButton.click();
+  await selectTable(page, tableName);
   const cell = page.locator(`[id="smart-cell-${record.id}-${primary.id}"]`);
   await expect(cell).toContainText(originalValue);
   return { tableName, tableId: bundle.table.id, field: primary, record, cell, originalValue };
@@ -64,14 +68,18 @@ test('右键菜单项目、Esc、外部关闭和窗口边缘定位均可用', as
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
 
-  await fixture.cell.dispatchEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 1275, clientY: 715, button: 2 });
+  await fixture.cell.evaluate(node => node.dispatchEvent(new MouseEvent('contextmenu', {
+    bubbles: true, cancelable: true, clientX: window.innerWidth - 5, clientY: window.innerHeight - 5, button: 2
+  })));
   await expect(menu).toBeVisible();
   const box = await menu.boundingBox();
+  const viewport = page.viewportSize();
   expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.y).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(1280);
-  expect(box.y + box.height).toBeLessThanOrEqual(720);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
 
   await page.mouse.click(2, 2);
   await expect(menu).toBeHidden();
@@ -123,10 +131,20 @@ test('插入、复制、筛选、清空、历史恢复和删除都写入数据�
 
   menu = await openMenu(page, fixture.cell);
   await menu.getByRole('button', { name: '按此内容筛选' }).click();
+  let filteredBundle;
   await expect.poll(async () => {
-    const bundle = await getBundle(page, fixture.tableId);
-    return bundle.views.some(view => (view.config?.filters || []).some(filter => filter.field_id === fixture.field.id && filter.value === fixture.originalValue));
+    filteredBundle = await getBundle(page, fixture.tableId);
+    return filteredBundle.views.some(view => (view.config?.filters || []).some(filter => filter.field_id === fixture.field.id && filter.value === fixture.originalValue));
   }).toBeTruthy();
+
+  const filteredView = filteredBundle.views.find(view => (view.config?.filters || []).some(filter => filter.field_id === fixture.field.id && filter.value === fixture.originalValue));
+  const clearFilterResponse = await page.request.patch(`/api/smart-views/${filteredView.id}`, {
+    data: { config: { ...filteredView.config, filters: [] } }
+  });
+  expect(clearFilterResponse.ok()).toBeTruthy();
+  await page.reload();
+  await selectTable(page, fixture.tableName);
+  await expect(fixture.cell).toContainText(fixture.originalValue);
 
   menu = await openMenu(page, fixture.cell);
   await menu.getByRole('button', { name: '清除内容' }).click();
@@ -147,6 +165,7 @@ test('插入、复制、筛选、清空、历史恢复和删除都写入数据�
   await menu.getByRole('button', { name: '删除记录' }).click();
   await expect.poll(async () => (await getBundle(page, fixture.tableId)).records.length).toBe(countBeforeDelete - 1);
   await page.reload();
+  await selectTable(page, fixture.tableName);
   await expect(page.locator(`[id="smart-cell-${fixture.record.id}-${fixture.field.id}"]`)).toHaveCount(0);
 });
 
@@ -171,8 +190,7 @@ test('详情、评论、历史与子任务侧栏可操作并在刷新后保留',
   await panel.locator('header button').click();
 
   await page.reload();
-  const tableButton = page.locator('.small-nav').filter({ hasText: fixture.tableName });
-  await tableButton.click();
+  await selectTable(page, fixture.tableName);
   const cell = page.locator(`[id="smart-cell-${fixture.record.id}-${fixture.field.id}"]`);
   menu = await openMenu(page, cell);
   await menu.getByRole('button', { name: '添加评论' }).click();
