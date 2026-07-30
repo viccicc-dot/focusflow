@@ -33,6 +33,8 @@ jobs:
           node --check server/seed-data.js
           node --check server/seed.js
           node --check server/smart-tables.js
+          node --check server/smart-record-extras.js
+          node --check scripts/test-smart-record-extras.mjs
 
       - name: Verify smart table database schema
         env:
@@ -40,6 +42,12 @@ jobs:
           SEED_DEMO: 'false'
         run: |
           node -e "import('./server/db.js').then(({initDb,db})=>{initDb(); const names=db.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'smart_%' ORDER BY name\").all(); if(names.length!==5) throw new Error('Expected 5 smart table schema objects'); console.log(names); db.close();})"
+
+      - name: Verify smart record history and comments
+        env:
+          DATABASE_PATH: ./data/smart-record-extras-ci.db
+          SEED_DEMO: 'false'
+        run: node scripts/test-smart-record-extras.mjs
 
       - name: Validate launch and deployment configs
         run: |
