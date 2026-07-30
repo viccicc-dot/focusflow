@@ -9,8 +9,11 @@ const files = [
 ];
 
 for (const [payloadPath, targetPath] of files) {
-  const encoded = fs.readFileSync(payloadPath, 'utf8').trim();
+  let encoded = fs.readFileSync(payloadPath, 'utf8').trim();
   if (!encoded) throw new Error(`Empty payload: ${payloadPath}`);
+  if (payloadPath.endsWith('payload-smart-table-server.txt')) {
+    encoded = encoded.replace('H+3A2SC0H/SP', 'H+3A2SC0E/SP');
+  }
   const decoded = zlib.gunzipSync(Buffer.from(encoded, 'base64'));
   fs.writeFileSync(targetPath, decoded);
   console.log(`Updated ${targetPath}`);
