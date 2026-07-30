@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Clipboard, ClipboardPaste, Copy, Rows3, Maximize2, ListTree, MessageSquarePlus,
   Link2, History, Filter, Eraser, Trash2, ChevronRight, X, RotateCcw, Send
@@ -34,13 +34,20 @@ export function SmartContextMenu({ menu, onClose, actions }) {
   const ref = useRef(null);
   const [count, setCount] = useState(1);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [position, setPosition] = useState({left: 8, top: 8});
   useDismiss(ref, onClose, Boolean(menu));
   useEffect(() => { setCount(1); setPasteOpen(false); }, [menu?.record?.id, menu?.field?.id]);
+  useLayoutEffect(() => {
+    if (!menu || !ref.current) return;
+    const frame = 8;
+    const rect = ref.current.getBoundingClientRect();
+    const width = Math.min(rect.width || 286, Math.max(0, window.innerWidth - frame * 2));
+    const height = Math.min(rect.height || 0, Math.max(0, window.innerHeight - frame * 2));
+    const left = Math.max(frame, Math.min(menu.x, window.innerWidth - width - frame));
+    const top = Math.max(frame, Math.min(menu.y, window.innerHeight - height - frame));
+    setPosition(current => current.left === left && current.top === top ? current : {left, top});
+  }, [menu?.x, menu?.y, menu?.record?.id, menu?.field?.id, pasteOpen]);
   if (!menu) return null;
-  const width = 286;
-  const estimatedHeight = 620;
-  const left = Math.max(8, Math.min(menu.x, window.innerWidth - width - 8));
-  const top = Math.max(8, Math.min(menu.y, window.innerHeight - estimatedHeight - 8));
   const run = fn => async () => {
     try { await fn?.(); } finally { onClose(); }
   };
@@ -51,7 +58,7 @@ export function SmartContextMenu({ menu, onClose, actions }) {
     <input aria-label="插入记录数量" type="number" min="1" max="100" value={count}
       onChange={event => setCount(Math.max(1, Math.min(100, Number(event.target.value) || 1)))}/><small>条</small>
   </div>;
-  return <div ref={ref} className="smart-context-menu" style={{left, top}} role="menu" onContextMenu={event => event.preventDefault()}>
+  return <div ref={ref} className="smart-context-menu" style={position} role="menu" onContextMenu={event => event.preventDefault()}>
     <MenuButton icon={ClipboardPaste} onClick={run(actions.paste)}>粘贴</MenuButton>
     <div className="smart-context-submenu-wrap">
       <MenuButton icon={Clipboard} onClick={() => setPasteOpen(value => !value)} suffix={<ChevronRight size={15}/>}>选择性粘贴</MenuButton>
