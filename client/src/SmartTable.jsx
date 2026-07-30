@@ -11,6 +11,7 @@ import {
 } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { api } from './api.js';
+import { SmartContextMenu, SmartRecordPanel } from './SmartContextMenu.jsx';
 import './smart-table.css';
 
 const FIELD_TYPES = [
@@ -82,6 +83,23 @@ function normalizeOptions(text, oldOptions = []) {
 }
 function fieldTypeLabel(type) {
   return FIELD_TYPES.find(item => item[0] === type)?.[1] || type;
+}
+
+function clipboardValue(field, text) {
+  const value = String(text ?? '').trim();
+  if (!value) return null;
+  if (field.type === 'number') {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+  if (field.type === 'checkbox') return ['1', 'true', 'yes', '是', '已勾选'].includes(value.toLowerCase());
+  if (field.type === 'select' || field.type === 'status') {
+    return field.config?.options?.find(option => option.id === value || option.label === value)?.id || value;
+  }
+  if (field.type === 'multi_select') {
+    return value.split(/[、,，\n]/).map(item => item.trim()).filter(Boolean).map(item => field.config?.options?.find(option => option.id === item || option.label === item)?.id || item);
+  }
+  return value;
 }
 
 function useOutside(ref, handler, active = true) {
@@ -197,7 +215,7 @@ function ActiveEditor({ field, value, onCommit, onCancel, onMove }) {
     onBlur={() => commit(draft)} onKeyDown={keyDown}/>;
 }
 
-function EditableCell({ record, field, value, active, onActivate, onSave, onMove }) {
+function EditableCell({ record, field, value, active, onActivate, onSave, onMove, onContextMenu }) {
   const save = async next => {
     await onSave(record, field, next);
     onActivate(null);
@@ -205,7 +223,7 @@ function EditableCell({ record, field, value, active, onActivate, onSave, onMove
   if (active) return <div className={`smart-cell editing type-${field.type}`}>
     <ActiveEditor field={field} value={value} onCommit={save} onCancel={() => onActivate(null)} onMove={onMove}/>
   </div>;
-  return <button type="button" className={`smart-cell display type-${field.type}`} onClick={() => onActivate({recordId: record.id, fieldId: field.id})} onDoubleClick={() => onActivate({recordId: record.id, fieldId: field.id})}>
+  return <button id={`smart-cell-${record.id}-${field.id}`} type="button" className={`smart-cell display type-${field.type}`} onContextMenu={event => onContextMenu?.(event, record, field)} onClick={() => onActivate({recordId: record.id, fieldId: field.id})} onDoubleClick={() => onActivate({recordId: record.id, fieldId: field.id})}>
     <CellDisplay field={field} value={value}/>
   </button>;
 }
@@ -305,7 +323,18 @@ function GridView({ bundle, view, onReload, showToast }) {
   const [collapsed, setCollapsed] = useState({});
   const [activeCell, setActiveCell] = useState(null);
   const [menuFieldId, setMenuFieldId] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [recordPanel, setRecordPanel] = useState(null);
   const fields = bundle.fields.filter(field => !field.hidden && !(config.hidden_field_ids || []).includes(field.id));
+  useEffect(() => {
+    const match = window.location.hash.match(/smart-record=([^&]+)&field=([^&]+)/);
+    if (!match) return;
+    const recordId = decodeURIComponent(match[1]);
+    const fieldId = decodeURIComponent(match[2]);
+    if (!bundle.records.some(record => record.id === recordId) || !bundle.fields.some(field => field.id === fieldId)) return;
+    setActiveCell({recordId, fieldId});
+    requestAnimationFrame(() => document.getElementById(`smart-cell-${recordId}-${fieldId}`)?.scrollIntoView({block: 'center', inline: 'center'}));
+  }, [bundle.table.id]);
   const filtered = useMemo(() => {
     let records = [...bundle.records];
     for (const filter of config.filters || []) {
@@ -379,6 +408,56 @@ function GridView({ bundle, view, onReload, showToast }) {
   const duplicate = async record => {
     try { await api(`/api/smart-records/${record.id}/duplicate`, {method: 'POST'}); await onReload(); showToast('记录已复制'); }
     catch (error) { showToast(error.message, 'error'); }
+  };
+  const openContextMenu = (event, record, field) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveCell({recordId: record.id, fieldId: field.id});
+    setContextMenu({x: event.clientX, y: event.clientY, record, field});
+  };
+  const copyContextValue = async () => {
+    const {record, field} = contextMenu;
+    await navigator.clipboard.writeText(stringifyValue(field, valueOf(record, field.id)));
+    showToast('已复制单元格内容');
+  };
+  const pasteContextValue = async () => {
+    const {record, field} = contextMenu;
+    const text = await navigator.clipboard.readText();
+    await saveCell(record, field, clipboardValue(field, text));
+    showToast('已粘贴');
+  };
+  const insertContextRecords = async (direction, count) => {
+    const record = contextMenu.record;
+    const total = Math.max(1, Math.min(100, Number(count) || 1));
+    try {
+      for (let index = 0; index < total; index += 1) {
+        const offset = (index + 1) / (total + 1);
+        const position = direction === 'above' ? Number(record.position) - (1 - offset) : Number(record.position) + offset;
+        await api(`/api/smart-tables/${bundle.table.id}/records`, {method: 'POST', body: {position, values: {}}});
+      }
+      await onReload(false);
+      showToast(`已插入 ${total} 条记录`);
+    } catch (error) { showToast(error.message, 'error'); }
+  };
+  const filterByContextValue = async () => {
+    const {record, field} = contextMenu;
+    const value = stringifyValue(field, valueOf(record, field.id));
+    const nextFilters = [...(config.filters || []), {field_id: field.id, operator: 'equals', value}];
+    await api(`/api/smart-views/${view.id}`, {method: 'PATCH', body: {config: {...config, filters: nextFilters}}});
+    await onReload(false);
+    showToast('已按当前内容筛选');
+  };
+  const clearContextValue = async () => {
+    const {record, field} = contextMenu;
+    await saveCell(record, field, null);
+    showToast('内容已清除');
+  };
+  const copyContextLink = async () => {
+    const {record, field} = contextMenu;
+    const url = new URL(window.location.href);
+    url.hash = `smart-record=${encodeURIComponent(record.id)}&field=${encodeURIComponent(field.id)}`;
+    await navigator.clipboard.writeText(url.toString());
+    showToast('选区链接已复制');
   };
   const updateField = async (field, patch) => {
     try { await api(`/api/smart-fields/${field.id}`, {method: 'PATCH', body: patch}); await onReload(false); }
@@ -456,7 +535,7 @@ function GridView({ bundle, view, onReload, showToast }) {
           draggable onDragStart={event => event.dataTransfer.setData('text/record-id', record.id)} onDragOver={event => event.preventDefault()} onDrop={event => reorderRecord(event.dataTransfer.getData('text/record-id'), record.id)}>
           <div className="row-select"><GripVertical size={14}/><input type="checkbox" checked={selected.includes(record.id)} onChange={event => setSelected(event.target.checked ? [...selected, record.id] : selected.filter(id => id !== record.id))}/></div>
           <div className="row-number">{index + 1}</div>
-          {fields.map(field => <EditableCell key={field.id} record={record} field={field} value={valueOf(record, field.id)} active={activeCell?.recordId === record.id && activeCell?.fieldId === field.id} onActivate={setActiveCell} onSave={saveCell} onMove={moveFromCell}/>) }
+          {fields.map(field => <EditableCell key={field.id} record={record} field={field} value={valueOf(record, field.id)} active={activeCell?.recordId === record.id && activeCell?.fieldId === field.id} onActivate={setActiveCell} onSave={saveCell} onMove={moveFromCell} onContextMenu={openContextMenu}/>) }
           <div className="row-actions">
             <button className={record.task_id ? 'linked' : ''} onClick={() => convertToTasks([record.id])} title={record.task_id ? '已同步到任务' : '标记为任务'}><Link2 size={14}/></button>
             <button onClick={() => duplicate(record)} title="复制记录"><Copy size={14}/></button>
@@ -466,6 +545,22 @@ function GridView({ bundle, view, onReload, showToast }) {
       </React.Fragment>)}
       <EmptyRow fields={fields} onCreate={createRecord}/>
     </div>
+    <SmartContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} actions={{
+      paste: pasteContextValue,
+      pasteValues: pasteContextValue,
+      copyValue: copyContextValue,
+      insert: insertContextRecords,
+      duplicate: () => duplicate(contextMenu.record),
+      expand: () => setRecordPanel({mode: 'details', recordId: contextMenu.record.id, fieldId: contextMenu.field.id}),
+      subtask: () => setRecordPanel({mode: 'subtask', recordId: contextMenu.record.id, fieldId: contextMenu.field.id}),
+      comment: () => setRecordPanel({mode: 'comments', recordId: contextMenu.record.id, fieldId: contextMenu.field.id}),
+      copyLink: copyContextLink,
+      history: () => setRecordPanel({mode: 'history', recordId: contextMenu.record.id, fieldId: contextMenu.field.id}),
+      filter: filterByContextValue,
+      clear: clearContextValue,
+      remove: () => removeRecords([contextMenu.record.id])
+    }}/>
+    <SmartRecordPanel panel={recordPanel} bundle={bundle} onClose={() => setRecordPanel(null)} onReload={onReload} showToast={showToast}/>
   </div>;
 }
 

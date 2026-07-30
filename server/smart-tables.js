@@ -1,4 +1,5 @@
 import { db, id, now } from './db.js';
+import { registerSmartRecordExtraRoutes, saveSmartRecordValues } from './smart-record-extras.js';
 
 const FIELD_TYPES = new Set([
   'text', 'long_text', 'number', 'select', 'multi_select', 'status',
@@ -140,18 +141,8 @@ export function smartTableBundle(tableId, workspaceId) {
   return base;
 }
 
-function saveRecordValues(recordId, tableId, values) {
-  if (!values || typeof values !== 'object' || Array.isArray(values)) return;
-  const allowedFields = new Set(db.prepare('SELECT id FROM smart_fields WHERE table_id = ?').all(tableId).map(row => row.id));
-  const upsert = db.prepare(`
-    INSERT INTO smart_values (record_id, field_id, value_json, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(record_id, field_id) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-  `);
-  for (const [fieldId, value] of Object.entries(values)) {
-    if (!allowedFields.has(fieldId)) continue;
-    upsert.run(recordId, fieldId, encode(value), now());
-  }
+function saveRecordValues(recordId, tableId, values, userId = null) {
+  saveSmartRecordValues(recordId, tableId, values, userId);
 }
 
 function defaultOptions(items) {
@@ -300,6 +291,7 @@ function maybeSyncRecordToTask(recordId, workspaceId, user) {
 }
 
 export function registerSmartTableRoutes(app, auth) {
+  registerSmartRecordExtraRoutes(app, auth);
   app.get('/api/smart-tables', auth, (req, res) => {
     res.json({tables: smartTableSummaries(req.workspace.id)});
   });
@@ -384,7 +376,7 @@ export function registerSmartTableRoutes(app, auth) {
     db.transaction(() => {
       db.prepare(`INSERT INTO smart_records (id,table_id,position,task_id,created_at,updated_at)
         VALUES (@id,@table_id,@position,@task_id,@created_at,@updated_at)`).run(record);
-      saveRecordValues(record.id, table.id, req.body.values || {});
+      saveRecordValues(record.id, table.id, req.body.values || {}, req.user.id);
     })();
     maybeSyncRecordToTask(record.id, req.workspace.id, req.user);
     const bundle = smartTableBundle(table.id, req.workspace.id);
@@ -398,7 +390,7 @@ export function registerSmartTableRoutes(app, auth) {
     const taskId = req.body.task_id === undefined ? record.task_id : req.body.task_id || null;
     db.transaction(() => {
       db.prepare('UPDATE smart_records SET position=?,task_id=?,updated_at=? WHERE id=?').run(position, taskId, now(), record.id);
-      saveRecordValues(record.id, record.table_id, req.body.values || {});
+      saveRecordValues(record.id, record.table_id, req.body.values || {}, req.user.id);
     })();
     maybeSyncRecordToTask(record.id, req.workspace.id, req.user);
     const bundle = smartTableBundle(record.table_id, req.workspace.id);
@@ -448,7 +440,7 @@ export function registerSmartTableRoutes(app, auth) {
     }
     if (action === 'update') {
       db.transaction(() => records.forEach(record => {
-        saveRecordValues(record.id, record.table_id, req.body.values || {});
+        saveRecordValues(record.id, record.table_id, req.body.values || {}, req.user.id);
         db.prepare('UPDATE smart_records SET updated_at=? WHERE id=?').run(now(), record.id);
       }))();
       records.forEach(record => maybeSyncRecordToTask(record.id, req.workspace.id, req.user));
