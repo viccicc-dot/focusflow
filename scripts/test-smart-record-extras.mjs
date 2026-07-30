@@ -30,12 +30,16 @@ saveSmartRecordValues(recordId, tableId, {[fieldId]: '第二版'}, userId);
 
 const current = JSON.parse(db.prepare('SELECT value_json FROM smart_values WHERE record_id=? AND field_id=?').get(recordId, fieldId).value_json);
 assert.equal(current, '第二版');
-const history = db.prepare('SELECT old_value_json,new_value_json FROM smart_cell_history WHERE record_id=? AND field_id=? ORDER BY created_at,id').all(recordId, fieldId);
+const history = db.prepare('SELECT old_value_json,new_value_json FROM smart_cell_history WHERE record_id=? AND field_id=? ORDER BY rowid').all(recordId, fieldId);
 assert.equal(history.length, 2);
 assert.equal(JSON.parse(history[0].old_value_json), null);
 assert.equal(JSON.parse(history[0].new_value_json), '第一版');
 assert.equal(JSON.parse(history[1].old_value_json), '第一版');
 assert.equal(JSON.parse(history[1].new_value_json), '第二版');
+
+const newest = db.prepare('SELECT old_value_json,new_value_json FROM smart_cell_history WHERE record_id=? AND field_id=? ORDER BY rowid DESC LIMIT 1').get(recordId, fieldId);
+assert.equal(JSON.parse(newest.old_value_json), '第一版');
+assert.equal(JSON.parse(newest.new_value_json), '第二版');
 
 const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('smart_cell_history','smart_record_comments') ORDER BY name").all();
 assert.deepEqual(tables.map(row => row.name), ['smart_cell_history', 'smart_record_comments']);
